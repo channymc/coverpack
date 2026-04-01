@@ -1,0 +1,195 @@
+name: Chuyển Đổi Pack
+description: Yêu cầu chuyển đổi pack tự động
+title: "[Yêu Cầu Chuyển Đổi]: "
+labels: ["conversion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Hướng dẫn tải tệp
+        Vui lòng **kéo-thả tệp trực tiếp vào từng ô nhập** trong biểu mẫu.
+        GitHub sẽ tự tạo liên kết tệp đính kèm nội bộ, bạn **không cần** và **không nên** dán link tải ngoài.
+
+        ⚠️ Không dùng link Google Drive, MediaFire, Dropbox, OneDrive hoặc trang chia sẻ tệp khác.
+        ✅ Định dạng khuyến nghị: `.zip`, `.jar`, `.mcpack`.
+  - type: textarea
+    id: java-pack-upload
+    attributes:
+      label: Tệp Java Pack (bắt buộc)
+      description: Kéo-thả tệp gói tài nguyên Java vào ô này. Bạn có thể thêm ghi chú nếu cần.
+      placeholder: Kéo-thả tệp .zip/.jar/.mcpack vào đây
+    validations:
+      required: true
+  - type: textarea
+    id: default-pack-upload
+    attributes:
+      label: Tệp Gói Mặc Định (tuỳ chọn)
+      description: Kéo-thả tệp gói Java dùng làm gói dự phòng trước khi dùng gói tài nguyên mặc định của Minecraft.
+      placeholder: Kéo-thả tệp dự phòng (nếu có)
+    validations:
+      required: false
+  - type: textarea
+    id: bedrock-merge-pack-upload
+    attributes:
+      label: Tệp Gói Bedrock Để Gộp (tuỳ chọn)
+      description: Kéo-thả tệp gói tài nguyên Bedrock để gộp vào gói sau chuyển đổi.
+      placeholder: Kéo-thả tệp .mcpack/.zip để gộp (nếu có)
+    validations:
+      required: false
+  - type: checkboxes
+    id: upload-confirm
+    attributes:
+      label: Xác Nhận Cách Gửi Tệp
+      description: Xác nhận rằng bạn gửi tệp đúng cách để workflow có thể tải tự động.
+      options:
+        - label: Tôi đã kéo-thả tệp trực tiếp vào biểu mẫu, không dùng link tải ngoài.
+          required: true
+  - type: dropdown
+    id: default-assets-version
+    attributes:
+      label: Phiên Bản Tài Nguyên Mặc Định
+      description: Chọn phiên bản tài nguyên mặc định muốn dùng cho quá trình chuyển đổi.
+      options:
+        - 1.13.2
+        - 1.14.4
+        - 1.15.2
+        - 1.16.5
+        - 1.17.1
+        - 1.18.2
+        - 1.19.2
+        - 1.19.3
+        - 1.19.4
+        - '1.20'
+        - 1.20.1
+    validations:
+      required: false
+
+  - type: dropdown
+    id: block-material
+    attributes:
+      label: Vật Liệu Block
+      description: |
+        Chọn vật liệu block dùng trong quá trình chuyển đổi. Nếu không chọn sẽ dùng `alpha_test`.
+        Xem thêm tại [Bedrock Wiki](https://wiki.bedrock.dev/blocks/block-materials.html).
+          - `opaque`: không hỗ trợ pixel trong suốt/bán trong suốt, chỉ render mặt ngoài
+          - `alpha_test`: hỗ trợ pixel trong suốt, chỉ render mặt ngoài
+          - `blend`: hỗ trợ pixel bán trong suốt, chỉ render mặt ngoài
+          - `double_sided`: không hỗ trợ trong suốt/bán trong suốt, render cả 2 mặt
+      options:
+        - opaque
+        - alpha_test
+        - blend
+        - double_sided
+    validations:
+      required: false
+  - type: dropdown
+    id: attachable-material
+    attributes:
+      label: Vật Liệu Attachable
+      description: |
+        Chọn vật liệu attachable dùng trong quá trình chuyển đổi. Nếu không chọn sẽ dùng `entity_alphatest_one_sided`.
+        Xem thêm tại [Bedrock Wiki](https://wiki.bedrock.dev/documentation/materials.html).
+          - `entity`: vật liệu đục cơ bản, không hỗ trợ pixel trong suốt/bán trong suốt
+          - `entity_alphatest`: hỗ trợ trong suốt nhưng thiếu ẩn mặt sau, dễ gây chồng hình
+          - `entity_alphablend`: hỗ trợ bán trong suốt và có ẩn mặt sau
+          - `entity_alphatest_one_sided`: hỗ trợ trong suốt và có ẩn mặt sau
+      options:
+        - entity
+        - entity_alphatest
+        - entity_alphablend
+        - entity_alphatest_one_sided
+        - entity_emissive_alpha_one_sided
+    validations:
+      required: false
+  - type: dropdown
+    id: archive-scratch-files
+    attributes:
+      label: Lưu Trữ Tệp Scratch
+      description: |
+        Có lưu trữ tệp scratch không? Nếu bật, workflow sẽ tạo file zip chứa tệp tạm dùng khi chuyển đổi.
+        Mặc định: `false`.
+      options:
+        - 'true'
+        - 'false'
+  - type: dropdown
+    id: rename-model-files
+    attributes:
+      label: Đổi Tên Tệp Model
+      description: |
+        Có đổi tên tệp model để giảm độ dài đường dẫn không? Mặc định: `false`.
+      options:
+        - 'true'
+        - 'false'
+  - type: dropdown
+    id: font-conversion
+    attributes:
+      label: Chuyển Đổi Font
+      description: |
+        Bật chuyển đổi font (có thể phát sinh lỗi), mặc định `false`.
+      options:
+        - 'true'
+        - 'false'
+  - type: dropdown
+    id: armor-conversion
+    attributes:
+      label: Chuyển Đổi Armor
+      description: |
+        Bật chuyển đổi armor (chủ yếu cho ItemsAdder), mặc định `false`.
+      options:
+        - 'true'
+        - 'false'
+  - type: dropdown
+    id: meg3-fix
+    attributes:
+      label: Sửa Lỗi Meg3
+      description: |
+        Sửa lỗi model đen cho MEG3, mặc định `false`.
+      options:
+        - 'true'
+        - 'false'
+  - type: dropdown
+    id: sounds-conversion
+    attributes:
+      label: Chuyển Đổi Âm Thanh
+      description: |
+        Bật chuyển đổi âm thanh, mặc định `false`.
+      options:
+        - 'true'
+        - 'false'
+  - type: dropdown
+    id: bow-conversion
+    attributes:
+      label: Chuyển Đổi Cung
+      description: |
+        Bật chuyển đổi cung, mặc định `false`.
+      options:
+        - 'true'
+        - 'false'
+  - type: dropdown
+    id: shield-conversion
+    attributes:
+      label: Chuyển Đổi Khiên
+      description: |
+        Bật chuyển đổi khiên, mặc định `false`, **chưa sẵn sàng cho môi trường chạy thật**.
+      options:
+        - 'true'
+        - 'false'
+  - type: dropdown
+    id: block-conversion
+    attributes:
+      label: Chuyển Đổi Block
+      description: |
+        Bật chuyển đổi block, mặc định `false`.
+      options:
+        - 'true'
+        - 'false'
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Quy Tắc Ứng Xử
+      description: |
+        Khi gửi issue này, bạn đồng ý tuân thủ Quy Tắc Ứng Xử của dự án.
+        Bạn cũng xác nhận rằng bạn sở hữu hoặc có quyền sử dụng toàn bộ tài nguyên đã gửi trong biểu mẫu.
+      options:
+        - label: Tôi đồng ý tuân thủ Quy Tắc Ứng Xử của dự án và có quyền sử dụng toàn bộ tài nguyên đã gửi.
+          required: true

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Hỗ Trợ Converter
+    url: /discussions/categories/converter-help
+    about: Hỏi đáp và hỗ trợ cài đặt/chạy converter.
+  - name: Đề Xuất Tính Năng
+    url: /discussions/categories/feature-requests
+    about: Thảo luận ý tưởng tính năng mới cho converter.
