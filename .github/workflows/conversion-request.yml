@@ -2,13 +2,16 @@ name: Yêu Cầu Chuyển Đổi
 on:
   issues:
     types:
+      - opened
+      - edited
+      - reopened
       - labeled
 
 jobs:
   get-pack-info:
     name: Phân tích yêu cầu chuyển đổi
     runs-on: ubuntu-latest
-    if: github.event.label.name == 'conversion'
+    if: contains(github.event.issue.labels.*.name, 'conversion')
     permissions:
       issues: read
     timeout-minutes: 2
@@ -32,9 +35,47 @@ jobs:
       - name: Phân tích biểu mẫu Issue
         id: parse-issue
         uses: zentered/issue-forms-body-parser@v2.2.0
+        continue-on-error: true
       - name: Chuẩn hoá tham số đầu vào
         id: organize-inputs
         run: |
+          set -euo pipefail
+
+          ALLOWED_ATTACHMENT_REGEX='https?://(github\.com/user-attachments/(files|assets)/|github\.com/[^/]+/[^/]+/assets/[0-9]+/|user-images\.githubusercontent\.com/|private-user-images\.githubusercontent\.com/)[^[:space:])>]+'
+          ANY_URL_REGEX='https?://[^[:space:])>]+'
+
+          extract_attachment_from_text() {
+            local text="${1:-}"
+            if [[ -z "${text}" ]]; then
+              return 0
+            fi
+            printf '%s' "${text}" | grep -Eo "${ALLOWED_ATTACHMENT_REGEX}" | head -n 1 || true
+          }
+
+          extract_section_text() {
+            local heading="${1:-}"
+            local body="${2:-}"
+            if [[ -z "${heading}" || -z "${body}" ]]; then
+              return 0
+            fi
+
+            printf '%s\n' "${body}" | awk -v h="### ${heading}" '
+              BEGIN { capture = 0 }
+              $0 == h { capture = 1; next }
+              /^### / { if (capture == 1) exit }
+              capture == 1 { print }
+            '
+          }
+
+          normalize_url_value() {
+            local value="${1:-}"
+            if [[ -z "${value}" || "${value}" == "null" ]]; then
+              printf 'null'
+            else
+              printf '%s' "${value}"
+            fi
+          }
+
           cat > parse-form.jq <<'JQ'
           def ensure_object:
             if type == "object" then .
@@ -45,7 +86,7 @@ jobs:
             end;
 
           def attachment_regex:
-            "https?://(?:github\\.com/user-attachments/(?:files|assets)/|user-images\\.githubusercontent\\.com/|private-user-images\\.githubusercontent\\.com/)[^\\s\\)>]+";
+            "https?://(?:github\\.com/user-attachments/(?:files|assets)/|github\\.com/[^/]+/[^/]+/assets/[0-9]+/|user-images\\.githubusercontent\\.com/|private-user-images\\.githubusercontent\\.com/)[^\\s\\)>]+";
 
           def field_text($form; $id):
             ($form[$id] // "") as $field
@@ -118,8 +159,49 @@ jobs:
 
           echo '${{ toJSON(steps.parse-issue.outputs.data) }}' | jq -f parse-form.jq > inputs.json
 
-          PACK_URL="$(jq -r '.pack_url' inputs.json)"
+          ISSUE_BODY="$(jq -r '.issue.body // ""' "${GITHUB_EVENT_PATH}")"
+
+          PACK_URL="$(jq -r '.pack_url // "null"' inputs.json)"
+          DEFAULT_PACK_URL="$(jq -r '.default_pack_url // "null"' inputs.json)"
+          MERGE_PACK_URL="$(jq -r '.merge_pack_url // "null"' inputs.json)"
+
+          if [[ "${PACK_URL}" == "null" || -z "${PACK_URL}" ]]; then
+            PACK_URL="$(extract_attachment_from_text "$(extract_section_text 'Tệp Java Pack (bắt buộc)' "${ISSUE_BODY}")")"
+          fi
+
+          if [[ "${DEFAULT_PACK_URL}" == "null" || -z "${DEFAULT_PACK_URL}" ]]; then
+            DEFAULT_PACK_URL="$(extract_attachment_from_text "$(extract_section_text 'Tệp Gói Mặc Định (tuỳ chọn)' "${ISSUE_BODY}")")"
+          fi
+
+          if [[ "${MERGE_PACK_URL}" == "null" || -z "${MERGE_PACK_URL}" ]]; then
+            MERGE_PACK_URL="$(extract_attachment_from_text "$(extract_section_text 'Tệp Gói Bedrock Để Gộp (tuỳ chọn)' "${ISSUE_BODY}")")"
+          fi
+
+          if [[ "${PACK_URL}" == "null" || -z "${PACK_URL}" ]]; then
+            PACK_URL="$(extract_attachment_from_text "${ISSUE_BODY}")"
+          fi
+
+          if [[ "${DEFAULT_PACK_URL}" == "null" || -z "${DEFAULT_PACK_URL}" ]]; then
+            DEFAULT_PACK_URL="null"
+          fi
+
+          if [[ "${MERGE_PACK_URL}" == "null" || -z "${MERGE_PACK_URL}" ]]; then
+            MERGE_PACK_URL="null"
+          fi
+
           HAS_EXTERNAL_URL="$(jq -r '.pack_has_external_url or .default_pack_has_external_url or .merge_pack_has_external_url' inputs.json)"
+          BODY_HAS_EXTERNAL_URL="false"
+          while IFS= read -r detected_url; do
+            [[ -z "${detected_url}" ]] && continue
+            if ! printf '%s' "${detected_url}" | grep -Eq "^${ALLOWED_ATTACHMENT_REGEX}$"; then
+              BODY_HAS_EXTERNAL_URL="true"
+              break
+            fi
+          done < <(printf '%s' "${ISSUE_BODY}" | grep -Eo "${ANY_URL_REGEX}" || true)
+
+          if [[ "${HAS_EXTERNAL_URL}" != "true" && "${BODY_HAS_EXTERNAL_URL}" == "true" ]]; then
+            HAS_EXTERNAL_URL="true"
+          fi
 
           if [[ "${HAS_EXTERNAL_URL}" == "true" ]]; then
             echo "Phát hiện liên kết ngoài không hợp lệ trong biểu mẫu."
@@ -134,9 +216,17 @@ jobs:
             exit 1
           fi
 
-          echo "PACK_URL=$(jq -r '.pack_url' inputs.json)" >> $GITHUB_OUTPUT
-          echo "DEFAULT_PACK_URL=$(jq -r '.default_pack_url' inputs.json)" >> $GITHUB_OUTPUT
-          echo "MERGE_PACK_URL=$(jq -r '.merge_pack_url' inputs.json)" >> $GITHUB_OUTPUT
+          PACK_URL="$(normalize_url_value "${PACK_URL}")"
+          DEFAULT_PACK_URL="$(normalize_url_value "${DEFAULT_PACK_URL}")"
+          MERGE_PACK_URL="$(normalize_url_value "${MERGE_PACK_URL}")"
+
+          echo "Resolved PACK_URL: ${PACK_URL}"
+          echo "Resolved DEFAULT_PACK_URL: ${DEFAULT_PACK_URL}"
+          echo "Resolved MERGE_PACK_URL: ${MERGE_PACK_URL}"
+
+          echo "PACK_URL=${PACK_URL}" >> $GITHUB_OUTPUT
+          echo "DEFAULT_PACK_URL=${DEFAULT_PACK_URL}" >> $GITHUB_OUTPUT
+          echo "MERGE_PACK_URL=${MERGE_PACK_URL}" >> $GITHUB_OUTPUT
           echo "DEFAULT_ASSETS_VERSION=$(jq -r '.default_assets_version' inputs.json)" >> $GITHUB_OUTPUT
           echo "BLOCK_MATERIAL=$(jq -r '.block_material' inputs.json)" >> $GITHUB_OUTPUT
           echo "ATTACHABLE_MATERIAL=$(jq -r '.attachable_material' inputs.json)" >> $GITHUB_OUTPUT
