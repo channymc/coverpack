@@ -36,8 +36,28 @@ jobs:
         id: organize-inputs
         run: |
           cat > parse-form.jq <<'JQ'
+          def ensure_object:
+            if type == "object" then .
+            elif type == "string" then
+              (try (fromjson | if type == "object" then . else {} end) catch {})
+            else
+              {}
+            end;
+
           def attachment_regex:
             "https?://(?:github\\.com/user-attachments/(?:files|assets)/|user-images\\.githubusercontent\\.com/|private-user-images\\.githubusercontent\\.com/)[^\\s\\)>]+";
+
+          def field_text($form; $id):
+            ($form[$id] // "") as $field
+            | if ($field | type) == "object" then
+                ($field.text // $field.value // "")
+              elif ($field | type) == "array" then
+                ($field | map(tostring) | join(" "))
+              elif $field == null then
+                ""
+              else
+                ($field | tostring)
+              end;
 
           def normalize($input):
             if ($input == null) then "" else ($input | tostring | gsub("\\\\";"")) end
@@ -72,25 +92,27 @@ jobs:
             (normalize($input)) as $text
             | if is_blank($text) then $default else $text end;
 
+          ensure_object as $form
+          |
           {
-            "pack_url": extract_attachment_url(.["java-pack-upload"].text),
-            "default_pack_url": extract_attachment_url(.["default-pack-upload"].text),
-            "merge_pack_url": extract_attachment_url(.["bedrock-merge-pack-upload"].text),
-            "pack_has_external_url": has_external_url(.["java-pack-upload"].text),
-            "default_pack_has_external_url": has_external_url(.["default-pack-upload"].text),
-            "merge_pack_has_external_url": has_external_url(.["bedrock-merge-pack-upload"].text),
-            "default_assets_version": pick(.["default-assets-version"].text; "1.19.3"),
-            "block_material": pick(.["block-material"].text; "alpha_test"),
-            "attachable_material": pick(.["attachable-material"].text; "entity_alphatest_one_sided"),
-            "archive_scratch": pick(.["archive-scratch-files"].text; "false"),
-            "rename_model_files": pick(.["rename-model-files"].text; "false"),
-            "font_conversion": pick(.["font-conversion"].text; "false"),
-            "armor_conversion": pick(.["armor-conversion"].text; "false"),
-            "meg3_fix": pick(.["meg3-fix"].text; "false"),
-            "sounds_conversion": pick(.["sounds-conversion"].text; "false"),
-            "bow_conversion": pick(.["bow-conversion"].text; "false"),
-            "shield_conversion": pick(.["shield-conversion"].text; "false"),
-            "block_conversion": pick(.["block-conversion"].text; "false")
+            "pack_url": extract_attachment_url(field_text($form; "java-pack-upload")),
+            "default_pack_url": extract_attachment_url(field_text($form; "default-pack-upload")),
+            "merge_pack_url": extract_attachment_url(field_text($form; "bedrock-merge-pack-upload")),
+            "pack_has_external_url": has_external_url(field_text($form; "java-pack-upload")),
+            "default_pack_has_external_url": has_external_url(field_text($form; "default-pack-upload")),
+            "merge_pack_has_external_url": has_external_url(field_text($form; "bedrock-merge-pack-upload")),
+            "default_assets_version": pick(field_text($form; "default-assets-version"); "1.19.3"),
+            "block_material": pick(field_text($form; "block-material"); "alpha_test"),
+            "attachable_material": pick(field_text($form; "attachable-material"); "entity_alphatest_one_sided"),
+            "archive_scratch": pick(field_text($form; "archive-scratch-files"); "false"),
+            "rename_model_files": pick(field_text($form; "rename-model-files"); "false"),
+            "font_conversion": pick(field_text($form; "font-conversion"); "false"),
+            "armor_conversion": pick(field_text($form; "armor-conversion"); "false"),
+            "meg3_fix": pick(field_text($form; "meg3-fix"); "false"),
+            "sounds_conversion": pick(field_text($form; "sounds-conversion"); "false"),
+            "bow_conversion": pick(field_text($form; "bow-conversion"); "false"),
+            "shield_conversion": pick(field_text($form; "shield-conversion"); "false"),
+            "block_conversion": pick(field_text($form; "block-conversion"); "false")
           }
           JQ
 
