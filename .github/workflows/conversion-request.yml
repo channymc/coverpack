@@ -11,7 +11,9 @@ jobs:
   get-pack-info:
     name: Phân tích yêu cầu chuyển đổi
     runs-on: ubuntu-latest
-    if: contains(github.event.issue.labels.*.name, 'conversion')
+    # FIX 1: Thêm github.event.issue.state == 'open' để tránh chạy lại khi
+    #         event 'labeled' kích hoạt sau 'opened' trên issue đã được đóng.
+    if: contains(github.event.issue.labels.*.name, 'conversion') && github.event.issue.state == 'open'
     permissions:
       issues: read
     timeout-minutes: 2
@@ -24,9 +26,9 @@ jobs:
       attachable_material: ${{ steps.organize-inputs.outputs.ATTACHABLE_MATERIAL }}
       archive_scratch: ${{ steps.organize-inputs.outputs.ARCHIVE_SCRATCH }}
       rename_model_files: ${{ steps.organize-inputs.outputs.RENAME_MODEL_FILES }}
-      font_conversion: ${{ steps.organize-inputs.outputs.FONT_CONVERSION}}
-      armor_conversion: ${{ steps.organize-inputs.outputs.ARMOR_CONVERSION}}
-      meg3_fix: ${{ steps.organize-inputs.outputs.MEG3_FIX}}
+      font_conversion: ${{ steps.organize-inputs.outputs.FONT_CONVERSION }}
+      armor_conversion: ${{ steps.organize-inputs.outputs.ARMOR_CONVERSION }}
+      meg3_fix: ${{ steps.organize-inputs.outputs.MEG3_FIX }}
       sounds_conversion: ${{ steps.organize-inputs.outputs.SOUNDS_CONVERSION }}
       bow_conversion: ${{ steps.organize-inputs.outputs.BOW_CONVERSION }}
       shield_conversion: ${{ steps.organize-inputs.outputs.SHIELD_CONVERSION }}
@@ -239,7 +241,7 @@ jobs:
           echo "BOW_CONVERSION=$(jq -r '.bow_conversion' inputs.json)" >> $GITHUB_OUTPUT
           echo "SHIELD_CONVERSION=$(jq -r '.shield_conversion' inputs.json)" >> $GITHUB_OUTPUT
           echo "BLOCK_CONVERSION=$(jq -r '.block_conversion' inputs.json)" >> $GITHUB_OUTPUT
-          
+
   convert-pack:
     name: Chạy chuyển đổi pack
     runs-on: ubuntu-latest
@@ -344,6 +346,7 @@ jobs:
             staging/plugin_context.json
             staging/*_map.json
           if-no-files-found: warn
+
   post-result:
     name: Gửi kết quả thành công
     runs-on: ubuntu-latest
@@ -351,6 +354,9 @@ jobs:
     timeout-minutes: 2
     permissions:
       issues: write
+    # FIX 2: Opt-in Node.js 24 để tránh deprecation warning (bắt buộc từ 2/6/2026)
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Gửi kết quả
         id: post-result
@@ -368,19 +374,32 @@ jobs:
 
             [1]: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id}}
           reactions: 'rocket'
-
       - name: Đóng issue
         uses: peter-evans/close-issue@v3
         with:
           issue-number: ${{ github.event.issue.number }}
+
   conversion-failed:
     name: Gửi thông báo thất bại
     runs-on: ubuntu-latest
     needs: [get-pack-info, convert-pack, post-result]
-    if: always() && (needs.get-pack-info.result == 'failure' || needs.convert-pack.result == 'failure' || needs.post-result.result == 'failure')
+    # FIX 3: Chỉ chạy khi issue thực sự được xử lý (có label + đang mở) VÀ có job thất bại.
+    #         Tránh kích hoạt nhầm khi tất cả job bị skip do issue đã đóng.
+    if: |
+      always() &&
+      contains(github.event.issue.labels.*.name, 'conversion') &&
+      github.event.issue.state == 'open' &&
+      (
+        needs.get-pack-info.result == 'failure' ||
+        needs.convert-pack.result == 'failure' ||
+        needs.post-result.result == 'failure'
+      )
     timeout-minutes: 2
     permissions:
       issues: write
+    # FIX 2: Opt-in Node.js 24 để tránh deprecation warning (bắt buộc từ 2/6/2026)
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Gửi thông báo lỗi
         id: post-result
