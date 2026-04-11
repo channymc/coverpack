@@ -1,0 +1,167 @@
+name: Kiểm Thử Chatbot Converter
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  fixture-conversion:
+    name: Mẫu kiểm thử ${{ matrix.pack_kind }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pack_kind:
+          - vanilla
+          - itemadder
+          - oraxen
+          - modelengine
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cài đặt Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Cài đặt Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cài đặt phụ thuộc
+        run: |
+          sudo apt-get update || sudo apt-get update --fix-missing
+          sudo apt-get install -y moreutils zip imagemagick jq
+          yarn global add spritesheet-js
+          pip install Pillow requests jproperties pyyaml
+
+      - name: Tạo gói mẫu kiểm thử
+        env:
+          PACK_KIND: ${{ matrix.pack_kind }}
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import os
+          import shutil
+          import zipfile
+          from PIL import Image
+
+          kind = os.environ["PACK_KIND"].strip()
+          root = Path("fixture_pack")
+          if root.exists():
+              shutil.rmtree(root)
+
+          (root / "assets/minecraft/models/item").mkdir(parents=True, exist_ok=True)
+          (root / "assets/minecraft/textures/item/custom").mkdir(parents=True, exist_ok=True)
+
+          (root / "pack.mcmeta").write_text(
+              json.dumps({"pack": {"pack_format": 18, "description": f"goi-mau-{kind}"}}, indent=2),
+              encoding="utf-8",
+          )
+
+          item_model = {
+              "parent": "minecraft:item/generated",
+              "textures": {"layer0": "minecraft:item/iron_sword"},
+              "overrides": [
+                  {
+                      "predicate": {"custom_model_data": 9001},
+                      "model": "minecraft:item/custom/fixture_blade"
+                  }
+              ]
+          }
+          (root / "assets/minecraft/models/item/iron_sword.json").write_text(
+              json.dumps(item_model, indent=2),
+              encoding="utf-8",
+          )
+
+          custom_model = {
+              "parent": "minecraft:item/generated",
+              "textures": {"layer0": "minecraft:item/custom/fixture_blade"}
+          }
+          (root / "assets/minecraft/models/item/custom/fixture_blade.json").parent.mkdir(parents=True, exist_ok=True)
+          (root / "assets/minecraft/models/item/custom/fixture_blade.json").write_text(
+              json.dumps(custom_model, indent=2),
+              encoding="utf-8",
+          )
+
+          image = Image.new("RGBA", (16, 16), (48, 180, 255, 255))
+          image.save(root / "assets/minecraft/textures/item/custom/fixture_blade.png")
+
+          if kind == "itemadder":
+              plugin_file = root / "contents/itemadder/configs/custom_items.yml"
+              plugin_file.parent.mkdir(parents=True, exist_ok=True)
+              plugin_file.write_text(
+                  "\n".join([
+                      "items:",
+                      "  fixture_blade:",
+                      "    material: IRON_SWORD",
+                      "    custom_model_data: 9002",
+                      "    model_path: minecraft:item/custom/fixture_blade",
+                  ]),
+                  encoding="utf-8",
+              )
+          elif kind == "oraxen":
+              plugin_file = root / "oraxen/items/fixtures.yml"
+              plugin_file.parent.mkdir(parents=True, exist_ok=True)
+              plugin_file.write_text(
+                  "\n".join([
+                      "fixture_blade:",
+                      "  material: IRON_SWORD",
+                      "  custom_model_data: 9003",
+                      "  model: minecraft:item/custom/fixture_blade",
+                  ]),
+                  encoding="utf-8",
+              )
+          elif kind == "modelengine":
+              plugin_file = root / "plugins/modelengine/blueprint.json"
+              plugin_file.parent.mkdir(parents=True, exist_ok=True)
+              plugin_file.write_text(
+                  json.dumps(
+                      {
+                          "items": [
+                              {
+                                  "material": "minecraft:iron_sword",
+                                  "custom_model_data": 9004,
+                                  "model": "minecraft:item/custom/fixture_blade"
+                              }
+                          ]
+                      },
+                      indent=2,
+                  ),
+                  encoding="utf-8",
+              )
+
+          zip_name = Path(f"{kind}.zip")
+          if zip_name.exists():
+              zip_name.unlink()
+
+          with zipfile.ZipFile(zip_name, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+              for file_path in root.rglob("*"):
+                  if file_path.is_file():
+                      zf.write(file_path, file_path.relative_to(root).as_posix())
+          PY
+
+      - name: Chạy chatbot converter
+        run: |
+          python chatbot.py "${{ matrix.pack_kind }}.zip"
+
+      - name: Tải artifact mẫu kiểm thử
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mau-kiem-thu-${{ matrix.pack_kind }}
+          path: |
+            staging/target/packaged/*
+            staging/target/*.json
+            staging/target/reports/*.json
+            staging/target/scratch_files.zip
+            staging/plugin_context.json
+            staging/config.json
+            staging/*_map.json
+          if-no-files-found: warn

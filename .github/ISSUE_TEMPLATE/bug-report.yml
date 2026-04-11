@@ -1,0 +1,41 @@
+name: Báo Lỗi
+description: Báo lỗi liên quan đến converter
+title: "[Lỗi]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Trước khi báo lỗi, bạn cần thử chuyển đổi pack bằng biểu mẫu [Yêu Cầu Chuyển Đổi](/issues/new?labels=conversion&template=pack-conversion.yml) và đính kèm liên kết issue kết quả.
+        Các báo lỗi không có liên kết issue chuyển đổi liên quan có thể bị đóng tự động.
+        
+        Nếu bạn chỉ cần hỗ trợ chạy converter trên máy cá nhân, vui lòng dùng mục [Hỗ Trợ Converter](/discussions/categories/converter-help).
+  - type: input
+    id: conversion-issue-link
+    attributes:
+      label: Liên Kết Issue Chuyển Đổi
+      description: Cung cấp liên kết trực tiếp đến issue chứa kết quả chuyển đổi.
+      placeholder: Ví dụ: https://github.com/<chu-so-huu>/<repo>/issues/15
+    validations:
+      required: true
+  - type: textarea
+    id: expected-output
+    attributes:
+      label: Kết Quả Mong Muốn
+      description: Mô tả chi tiết kết quả bạn mong muốn từ converter với pack đã cung cấp.
+    validations:
+      required: true
+  - type: textarea
+    id: actual-output
+    attributes:
+      label: Kết Quả Thực Tế
+      description: Mô tả chi tiết kết quả thực tế, lỗi gặp phải, và tham chiếu log action nếu có.
+    validations:
+      required: true
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Thông Tin Bổ Sung
+      description: Cung cấp thêm thông tin liên quan nếu cần (ảnh, môi trường, bản pack, v.v.).
+    validations:
+      required: false
